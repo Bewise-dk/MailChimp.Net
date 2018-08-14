@@ -41,6 +41,34 @@ namespace MailChimp.Net.Core
                     throw new MailChimpNotFoundException($"Unable to find the resource at {response.RequestMessage.RequestUri} ");
                 }
 
+                if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
+                {
+                    var responseContentString = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                    if (responseContentString.Contains("Request Blocked"))
+                    {
+                        throw new MailChimpComplianceRelatedException($"ComplianceRelated - This method has been disabled. You will see this error when your account is under compliance review - {response.RequestMessage.RequestUri}");
+                    } else
+                    {
+                        throw new MailChimpException(new MailChimpApiError()
+                        {
+                            Detail = $"Service down - {response.RequestMessage.RequestUri}",
+                            Status = (int)response.StatusCode,
+                            Instance = "",
+                            Title = "Service down",
+                            Errors = new System.Collections.Generic.List<MailChimpError>()
+                            {
+                                new MailChimpError()
+                                {
+                                    Message = responseContentString,
+                                    Field = "Service"
+                                }
+                            },
+                            Type = "Service"
+                        });
+                    }
+                }
+
                 var responseContentStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
 
                 throw new MailChimpException(responseContentStream.Deserialize<MailChimpApiError>(), response);
